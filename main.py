@@ -6,14 +6,16 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 from PIL import Image
-import io
-
+import io, shutil
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Editor de Packs de Texturas")
+        self.setWindowTitle("RP-Wizard")
         self.setGeometry(100, 100, 800, 600)
+        self.setWindowIcon(QPixmap("icon.ico"))
+
+        self.packDir = ""
 
         # Crear el widget de solapas (tabs)
         self.tabs = QTabWidget()
@@ -88,6 +90,9 @@ class MainWindow(QMainWindow):
                     if root.endswith("textures/item") and file_name.endswith(".png"):
                         self.texture_files.append(os.path.join(root, file_name))
 
+        #Ordenar la lista de texturas
+        self.texture_files.sort()
+
         # Poblar el ComboBox con los archivos encontrados
         for texture in self.texture_files:
             item_name = os.path.splitext(os.path.basename(texture))[0]  # Nombre sin extensión
@@ -122,9 +127,20 @@ class MainWindow(QMainWindow):
         if file_path:
             print(f"Reemplazando {self.combo_box.currentText()} con {file_path}")
             
-            # Actualizar vista previa después del cambio
-            pixmap = self.load_pixmap(file_path)
-            self.preview_label.setPixmap(pixmap)
+            # Cambiar el archivo de la textura en el zip
+            if self.zip_file:
+                texture_path = self.texture_files[selected_texture_index]
+                self.reemplazar_archivo_en_zip(self.zip_file.filename,texture_path,file_path)
+
+            base_path = os.path.dirname(__file__)
+            ruta_imagen = os.path.join(base_path, file_path.split("/")[-1])
+
+            pixmap = QPixmap(ruta_imagen)
+            if pixmap.isNull():
+                print(f"Error: No se pudo cargar la imagen desde '{ruta_imagen}'.")
+                self.preview_label.setText("No se pudo cargar la imagen.")
+            else:
+                self.preview_label.setPixmap(pixmap)
 
     def load_pixmap(self, texture_path):
         """Carga una imagen como QPixmap desde un archivo o archivo ZIP sin perder calidad."""
@@ -148,7 +164,19 @@ class MainWindow(QMainWindow):
             print(f"Error al cargar la imagen: {e}")
             return None
 
+    def reemplazar_archivo_en_zip(self, zip, archivo_a_reemplazar, nuevo_archivo):
+        zip_temporal = zip + '.tmp'
 
+        with ZipFile(zip, 'r') as zip_original:
+            with ZipFile(zip_temporal, 'w') as zip_nuevo:
+                for item in zip_original.infolist():
+                    if item.filename != archivo_a_reemplazar:
+                        zip_nuevo.writestr(item, zip_original.read(item.filename))
+                zip_nuevo.write(nuevo_archivo, archivo_a_reemplazar)
+
+        # Cerrar todos los archivos antes de manipularlos
+        shutil.move(zip_temporal, zip)
+        print(f"Archivo '{archivo_a_reemplazar}' reemplazado exitosamente en '{zip}'.") 
 
 # Crear la aplicación y mostrar la ventana
 if __name__ == "__main__":
